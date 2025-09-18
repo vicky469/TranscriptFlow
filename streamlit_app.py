@@ -413,9 +413,9 @@ def main():
                     st.markdown("### 🔗 Notion Page Created")
                     notion_url = results['upload']['page_url']
                     
-                    if st.button("🌐 Open Notion Page", type="primary"):
-                        st.markdown(f'<meta http-equiv="refresh" content="0; url={notion_url}">', 
-                                  unsafe_allow_html=True)
+                    # Create a link that opens in a new tab
+                    st.markdown(f'<a href="{notion_url}" target="_blank" style="text-decoration: none;"><button style="background-color: #ff4b4b; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer; font-size: 1rem;">🌐 Open Notion Page</button></a>', 
+                              unsafe_allow_html=True)
             else:
                 st.subheader("❌ Results")
                 # When ANY step fails, do NOT show success content
