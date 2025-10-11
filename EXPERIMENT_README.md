@@ -41,3 +41,7 @@ yt-dlp -x --audio-format mp3 --cookies-from-browser firefox -o './audios/%(chann
 
 // Method 1: Try with format 18 (combined audio/video) and extract audio
 yt-dlp -f 18 -x --audio-format mp3 --extractor-args "youtube:player_client=android" --geo-bypass -o './audios/%(channel)s - %(title)s.%(ext)s' 'https://www.youtube.com/watch?v=7hyoONj4nEY'
+
+## download the video
+
+yt-dlp --cookies-from-browser chrome -o './videos/%(channel)s - %(title)s.%(ext)s' 'https://www.youtube.com/watch?v=yP96dkspUL8'

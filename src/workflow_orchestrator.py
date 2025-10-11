@@ -14,6 +14,7 @@ import glob
 import json
 from notion_integration import NotionIntegration
 from transcript_processor import process_file
+from twitter_handler import TwitterThreadHandler
 
 class TranscriptWorkflow:
     def __init__(self, base_dir=None):
@@ -33,12 +34,12 @@ class TranscriptWorkflow:
         for directory in [self.raw_dir, self.failed_dir, self.clean_dir]:
             directory.mkdir(parents=True, exist_ok=True)
     
-    def run_complete_workflow(self, youtube_url, open_notion=True):
+    def run_complete_workflow(self, url, open_notion=True):
         """
-        Run the complete workflow from YouTube URL to Notion page.
+        Run the complete workflow from URL (YouTube or Twitter) to Notion page.
         
         Args:
-            youtube_url (str): YouTube video URL
+            url (str): YouTube video URL or Twitter thread URL
             open_notion (bool): Whether to open the Notion page in browser
             
         Returns:
@@ -50,17 +51,30 @@ class TranscriptWorkflow:
             'upload': {'success': False}
         }
         
-        print("🚀 Starting YouTube to Notion workflow...")
-        print(f"📺 URL: {youtube_url}")
+        # Detect URL type and route accordingly
+        # Check if it's a Twitter URL (simple check to avoid importing TwitterThreadHandler unnecessarily)
+        is_twitter = 'twitter.com' in url or 'x.com' in url
         
-        # Step 1: Download transcript from YouTube using shell script
-        print("\n📥 Step 1: Downloading transcript from YouTube...")
-        success, raw_file, video_info = self._download_with_script(youtube_url)
+        if is_twitter:
+            print("🚀 Starting Twitter to Notion workflow...")
+            print(f"🐦 URL: {url}")
+            
+            # Step 1: Download thread from Twitter (initialize handler only when needed)
+            print("\n📥 Step 1: Downloading thread from Twitter...")
+            twitter_handler = TwitterThreadHandler(self.base_dir)
+            success, raw_file, content_info = twitter_handler.fetch_thread_content(url)
+        else:
+            print("🚀 Starting YouTube to Notion workflow...")
+            print(f"📺 URL: {url}")
+            
+            # Step 1: Download transcript from YouTube using shell script
+            print("\n📥 Step 1: Downloading transcript from YouTube...")
+            success, raw_file, content_info = self._download_with_script(url)
         
         results['download'] = {
             'success': success,
             'file': raw_file,
-            'video_info': video_info
+            'content_info': content_info
         }
         
         if not success:
@@ -104,7 +118,7 @@ class TranscriptWorkflow:
             
             success, page_url, page_id = notion.upload_transcript(
                 str(clean_file_path),
-                video_info=video_info
+                content_info=content_info
             )
             
             results['upload'] = {
@@ -198,7 +212,7 @@ class TranscriptWorkflow:
                             with open(metadata_file, 'r', encoding='utf-8') as f:
                                 metadata = json.load(f)
                             
-                            video_info = {
+                            content_info = {
                                 'title': metadata.get('title', base_name),
                                 'duration': metadata.get('duration', 0),
                                 'uploader': metadata.get('uploader', 'Unknown'),
@@ -207,10 +221,10 @@ class TranscriptWorkflow:
                                 'description': metadata.get('description', ''),
                                 'webpage_url': metadata.get('webpage_url', '')
                             }
-                            print(f"📊 Loaded metadata: {video_info['uploader']} - {video_info['title']}")
+                            print(f"📊 Loaded metadata: {content_info['uploader']} - {content_info['title']}")
                         except Exception as e:
                             print(f"⚠️  Could not load metadata: {e}")
-                            video_info = {
+                            content_info = {
                                 'title': base_name,
                                 'duration': 0,
                                 'uploader': 'Unknown',
@@ -218,14 +232,14 @@ class TranscriptWorkflow:
                             }
                     else:
                         # Fallback to basic info from filename
-                        video_info = {
+                        content_info = {
                             'title': base_name,
                             'duration': 0,
                             'uploader': 'Unknown',
                             'upload_date': 'Unknown'
                         }
                     
-                    return True, transcript_file, video_info
+                    return True, transcript_file, content_info
                 else:
                     print("❌ No transcript file found after trying all methods")
                     return False, None, None
@@ -280,12 +294,13 @@ class TranscriptWorkflow:
 def main():
     """Main function for command-line usage."""
     if len(sys.argv) < 2:
-        print("🎯 YouTube to Notion Transcript Workflow")
+        print("🎯 Content to Notion Workflow")
         print("\nUsage:")
-        print("  python workflow_orchestrator.py <youtube_url>")
+        print("  python workflow_orchestrator.py <url>")
         print("  python workflow_orchestrator.py --existing <transcript_file>")
         print("\nExamples:")
         print("  python workflow_orchestrator.py 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'")
+        print("  python workflow_orchestrator.py 'https://x.com/username/status/1234567890'")
         print("  python workflow_orchestrator.py --existing transcript.txt")
         sys.exit(1)
     
@@ -309,10 +324,10 @@ def main():
         if not results['success']:
             sys.exit(1)
     else:
-        # Process YouTube URL
-        youtube_url = sys.argv[1]
+        # Process URL (YouTube or Twitter)
+        url = sys.argv[1]
         
-        results = workflow.run_complete_workflow(youtube_url)
+        results = workflow.run_complete_workflow(url)
         
         # Exit with error code if any step failed
         if not all(step['success'] for step in results.values()):

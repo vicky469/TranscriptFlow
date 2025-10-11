@@ -31,27 +31,48 @@ class NotionIntegration:
         
         self.client = Client(auth=self.token)
     
-    def _add_video_metadata(self, properties, video_info):
-        """Add video metadata to Notion page properties."""
-        if not video_info:
+    def _add_content_metadata(self, properties, content_info):
+        """Add content metadata (video or thread) to Notion page properties."""
+        if not content_info:
             return properties
         
         # Use 'uploader' field for Author (channel name)
-        if video_info.get('uploader'):
+        if content_info.get('uploader'):
             properties["Author"] = {
                 "rich_text": [
                     {
                         "type": "text",
                         "text": {
-                            "content": video_info['uploader']
+                            "content": content_info['uploader']
                         }
                     }
                 ]
             }
         
-        # Format upload_date for better display
-        if video_info.get('upload_date') and video_info['upload_date'] != 'Unknown':
-            upload_date = video_info['upload_date']
+        # Handle creation date for both YouTube and Twitter (date only, no time)
+        # Format as rich_text for compatibility with existing database
+        if content_info.get('created_time'):
+            # Twitter thread with ISO datetime - extract date only
+            from datetime import datetime
+            try:
+                dt = datetime.fromisoformat(content_info['created_time'])
+                formatted_date = dt.strftime('%Y-%m-%d')  # Date only
+            except:
+                formatted_date = content_info['created_time'].split('T')[0]  # Fallback: take date part
+            
+            properties["Created"] = {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": formatted_date
+                        }
+                    }
+                ]
+            }
+        elif content_info.get('upload_date') and content_info['upload_date'] != 'Unknown':
+            # YouTube video with YYYYMMDD format
+            upload_date = content_info['upload_date']
             # Format YYYYMMDD to YYYY-MM-DD if it's in that format
             if len(upload_date) == 8 and upload_date.isdigit():
                 formatted_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}"
@@ -70,15 +91,15 @@ class NotionIntegration:
             }
         
         # Convert duration from seconds to minutes for display
-        if video_info.get('duration') and video_info['duration'] > 0:
-            duration_min = str(int(video_info['duration']) // 60)
+        if content_info.get('duration') and content_info['duration'] > 0:
+            duration_min = str(int(content_info['duration']) // 60)
             properties["Duration"] = {
                 "phone_number": duration_min
             }
         
         # Add view count if available
-        if video_info.get('view_count') and video_info['view_count'] > 0:
-            view_count = f"{video_info['view_count']:,}"  # Format with commas
+        if content_info.get('view_count') and content_info['view_count'] > 0:
+            view_count = f"{content_info['view_count']:,}"  # Format with commas
             properties["Views"] = {
                 "rich_text": [
                     {
@@ -90,11 +111,28 @@ class NotionIntegration:
                 ]
             }
         
-        # Add video URL if available
-        if video_info.get('webpage_url'):
-            properties["Video URL"] = {
-                "url": video_info['webpage_url']
+        # Add content URL if available (works for both YouTube and Twitter)
+        content_url = content_info.get('webpage_url') or content_info.get('url')
+        if content_url:
+            properties["Content URL"] = {
+                "url": content_url
             }
+        
+        # Add Source column (Twitter or YouTube)
+        source_type = content_info.get('type', '')
+        if source_type == 'twitter_thread':
+            source_name = "Twitter"
+        elif content_info.get('webpage_url') or content_info.get('duration'):
+            # Has YouTube-specific fields
+            source_name = "YouTube"
+        else:
+            source_name = "Unknown"
+        
+        properties["Source"] = {
+            "select": {
+                "name": source_name
+            }
+        }
         
         return properties
         
@@ -134,14 +172,14 @@ class NotionIntegration:
                     # Last attempt or non-timeout error, re-raise
                     raise e
     
-    def create_page_in_database(self, title, content, video_info=None):
+    def create_page_in_database(self, title, content, content_info=None):
         """
         Create a new page in the specified Notion database.
         
         Args:
             title (str): Page title
             content (str): Transcript content
-            video_info (dict): Video metadata (title, uploader, etc.)
+            content_info (dict): Content metadata (title, uploader, etc.)
             
         Returns:
             tuple: (success, page_url, page_id)
@@ -157,23 +195,11 @@ class NotionIntegration:
                             }
                         }
                     ]
-                },
-                "Status": {
-                    "status": {
-                        "name": "Not started"
-                    }
                 }
             }
             
-            # Add video metadata if available
-            properties = self._add_video_metadata(properties, video_info)
-            
-            # Set default status
-            properties["Status"] = {
-                "status": {
-                    "name": "Not started"
-                }
-            }
+            # Add content metadata if available
+            properties = self._add_content_metadata(properties, content_info)
             
             # Create the page first without content (to avoid 100 block limit)
             # Create in database with retry
@@ -279,13 +305,13 @@ class NotionIntegration:
             }
         }
     
-    def upload_transcript(self, transcript_file, video_info=None):
+    def upload_transcript(self, transcript_file, content_info=None):
         """
         Upload a cleaned transcript file to Notion.
         
         Args:
             transcript_file (str): Path to the transcript file
-            video_info (dict): Video metadata to add to the page
+            content_info (dict): Content metadata to add to the page
             
         Returns:
             tuple: (success, page_url, page_id)
@@ -296,13 +322,13 @@ class NotionIntegration:
                 content = f.read()
             
             # Generate title from filename or video info
-            if video_info and video_info.get('title'):
-                title = f"📺 {video_info['title']}"
+            if content_info and content_info.get('title'):
+                title = f"📺 {content_info['title']}"
             else:
                 filename = os.path.basename(transcript_file)
                 title = f"📺 {os.path.splitext(filename)[0].replace('_clean', '')}"
             
-            return self.create_page_in_database(title, content, video_info)
+            return self.create_page_in_database(title, content, content_info)
             
         except Exception as e:
             print(f"❌ Error uploading transcript: {e}")
