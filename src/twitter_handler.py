@@ -191,38 +191,70 @@ class TwitterThreadHandler:
                     print(f"⚠️  Could not extract date: {e}")
                     tweet_date = None
                 
-                # Try multiple selectors to find tweet content
-                tweet_texts = []
+                # Extract thread content with inline media (preserve original structure)
+                print("🖼️  Extracting thread content with media...")
+                thread_items = []  # List of {'type': 'text'/'image'/'video', 'content': ...}
                 
-                # Look for tweet content in various possible containers
+                # Look for tweet content containers
                 selectors = [
-                    ('div', {'class': 'tweet-text'}),
                     ('div', {'class': 'content-tweet'}),
+                    ('div', {'class': 'tweet-text'}),
                     ('p', {'class': 'tweet'}),
                     ('div', {'class': 't-main'}),
                 ]
                 
+                tweet_elements = []
                 for tag, attrs in selectors:
-                    elements = soup.find_all(tag, attrs)
-                    if elements:
-                        print(f"Found {len(elements)} elements with {tag} {attrs}")
-                        for elem in elements:
-                            text = elem.get_text(strip=True)
-                            if text and len(text) > 20:
-                                tweet_texts.append(text)
-                        if tweet_texts:
-                            break
+                    tweet_elements = soup.find_all(tag, attrs)
+                    if tweet_elements:
+                        print(f"Found {len(tweet_elements)} tweet elements")
+                        break
                 
-                # If still no tweets, try getting all paragraphs from main content
-                if not tweet_texts:
-                    print("Trying to extract from main content area...")
-                    main_content = soup.find('div', {'class': 'content'})
-                    if main_content:
-                        paragraphs = main_content.find_all('p')
-                        for p in paragraphs:
-                            text = p.get_text(strip=True)
-                            if text and len(text) > 20:
-                                tweet_texts.append(text)
+                # Process each tweet element to extract text and media in order
+                for elem in tweet_elements:
+                    # Get text content
+                    text = elem.get_text(strip=True)
+                    if text and len(text) > 20:
+                        thread_items.append({'type': 'text', 'content': text})
+                    
+                    # Look for images within this tweet
+                    images = elem.find_all('img')
+                    for img in images:
+                        img_url = img.get('data-src') or img.get('src')
+                        if img_url and 'pbs.twimg.com/media/' in img_url:
+                            # Ensure full URL
+                            if img_url.startswith('//'):
+                                img_url = 'https:' + img_url
+                            elif img_url.startswith('/'):
+                                img_url = 'https://pbs.twimg.com' + img_url
+                            
+                            # Get original quality
+                            if '?format=' not in img_url:
+                                img_url = img_url + '?format=jpg&name=large'
+                            
+                            thread_items.append({'type': 'image', 'content': img_url})
+                    
+                    # Look for videos within this tweet
+                    videos = elem.find_all('video')
+                    for video in videos:
+                        video_url = video.get('src')
+                        if video_url:
+                            if video_url.startswith('//'):
+                                video_url = 'https:' + video_url
+                            thread_items.append({'type': 'video', 'content': video_url})
+                
+                # Count media
+                image_count = sum(1 for item in thread_items if item['type'] == 'image')
+                video_count = sum(1 for item in thread_items if item['type'] == 'video')
+                text_count = sum(1 for item in thread_items if item['type'] == 'text')
+                
+                if image_count > 0 or video_count > 0:
+                    print(f"📎 Found {text_count} tweets with {image_count} images and {video_count} videos")
+                else:
+                    print(f"📝 Found {text_count} tweets (no media)")
+                
+                # For backward compatibility, still create tweet_texts list
+                tweet_texts = [item['content'] for item in thread_items if item['type'] == 'text']
                 
                 if tweet_texts:
                     thread_content = '\n\n'.join(tweet_texts)
@@ -238,7 +270,8 @@ class TwitterThreadHandler:
                         'uploader': username,
                         'url': twitter_url,
                         'created_time': tweet_date.isoformat() if tweet_date else None,  # ISO format for Notion
-                        'type': 'twitter_thread'
+                        'type': 'twitter_thread',
+                        'thread_items': thread_items  # Structured content with inline media
                     }
                     
                     # Save to file

@@ -213,7 +213,7 @@ class NotionIntegration:
             page_url = response["url"]
             
             # Now add content in batches (Notion limit is 100 blocks per request)
-            content_blocks = self._create_content_blocks(content)
+            content_blocks = self._create_content_blocks(content, content_info)
             batch_size = 90  # Use 90 to be safe
             
             for i in range(0, len(content_blocks), batch_size):
@@ -233,11 +233,55 @@ class NotionIntegration:
             print(f"❌ Error creating Notion page: {e}")
             return False, None, None
     
-    def _create_content_blocks(self, content):
-        """Convert transcript content into Notion blocks."""
+    def _create_content_blocks(self, content, content_info=None):
+        """Convert transcript content into Notion blocks, with inline media for Twitter threads."""
         blocks = []
         
-        # Add a heading
+        # For Twitter threads with structured items, use inline layout
+        if content_info and content_info.get('type') == 'twitter_thread' and content_info.get('thread_items'):
+            thread_items = content_info['thread_items']
+            
+            # Process items in order to preserve original layout
+            for item in thread_items:
+                if item['type'] == 'text':
+                    # Add text as paragraph
+                    blocks.append(self._create_paragraph_block(item['content']))
+                    
+                elif item['type'] == 'image':
+                    # Add image inline
+                    blocks.append({
+                        "object": "block",
+                        "type": "image",
+                        "image": {
+                            "type": "external",
+                            "external": {
+                                "url": item['content']
+                            }
+                        }
+                    })
+                    
+                elif item['type'] == 'video':
+                    # Add video link
+                    blocks.append({
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {
+                                        "content": f"🎥 Video",
+                                        "link": {"url": item['content']}
+                                    }
+                                }
+                            ]
+                        }
+                    })
+            
+            return blocks
+        
+        # For regular content (YouTube or threads without structured items), use default layout
+        # Add content heading
         blocks.append({
             "object": "block",
             "type": "heading_2",
@@ -246,7 +290,7 @@ class NotionIntegration:
                     {
                         "type": "text",
                         "text": {
-                            "content": "Transcript Content"
+                            "content": "📝 Content"
                         }
                     }
                 ]
