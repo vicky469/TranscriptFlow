@@ -55,23 +55,59 @@ class WhisperTranscriber:
             temp_dir = Path(output_dir) / "temp"
             temp_dir.mkdir(exist_ok=True)
             
-            # Download audio using yt-dlp
+            # Download audio using yt-dlp with progress
             print("📥 Downloading audio from YouTube...")
             download_start = time.time()
-            cmd = [
-                "yt-dlp",
-                "--extract-audio",
-                "--audio-format", "wav",
-                "--output", str(temp_dir / "audio.%(ext)s"),
-                youtube_url
-            ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            download_time = time.time() - download_start
-            print(f"⏱️ Download completed in {download_time:.1f} seconds")
-            
-            if result.returncode != 0:
-                return False, None, f"Download failed: {result.stderr}"
+            # Try download with verbose mode if first attempt fails
+            for attempt in range(2):
+                cmd = [
+                    "yt-dlp",
+                    "--extract-audio",
+                    "--audio-format", "wav",
+                    "--output", str(temp_dir / "audio.%(ext)s"),
+                    "--progress",  # Show progress
+                    "--newline",   # Print progress on new lines for better parsing
+                    # Add headers to avoid 403 errors
+                    "--user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    "--referer", "https://www.youtube.com/",
+                    # Retry settings
+                    "--retries", "3",
+                    "--fragment-retries", "3",
+                    "--skip-unavailable-fragments",  # Skip fragments that fail
+                ]
+                
+                # Add verbose flag on second attempt for debugging
+                if attempt == 1:
+                    print("🔍 Retrying with verbose output for diagnostics...")
+                    cmd.extend(["-v", "--update"])  # Verbose and update check
+                
+                cmd.append(youtube_url)
+                
+                # Run with real-time output instead of capturing
+                try:
+                    result = subprocess.run(cmd, text=True, timeout=180)  # 3 minute timeout
+                    download_time = time.time() - download_start
+                    
+                    if result.returncode == 0:
+                        print(f"✅ Download completed in {download_time:.1f} seconds")
+                        break
+                    elif attempt == 0:
+                        print(f"⚠️  First attempt failed, trying again with diagnostics...")
+                        continue
+                    else:
+                        print(f"⚠️  Download had issues but checking for partial audio...")
+                        
+                except subprocess.TimeoutExpired:
+                    if attempt == 0:
+                        print("⚠️  First attempt timed out, trying once more...")
+                        continue
+                    else:
+                        print("❌ Download timed out after 3 minutes on retry")
+                        return False, None, "Download timed out"
+                except KeyboardInterrupt:
+                    print("\n⚠️  Download cancelled by user")
+                    return False, None, "Download cancelled"
             
             # Find the downloaded audio file
             audio_files = list(temp_dir.glob("audio.*"))
