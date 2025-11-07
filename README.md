@@ -1,6 +1,6 @@
-# YouTube to Notion Transcript Processor
+# Video to Notion Transcript Processor
 
-Automatically download YouTube transcripts, clean them, and upload to Notion with rich metadata for note taking.
+Automatically download video transcripts, clean them, and upload to Notion with rich metadata for note-taking.
 
 ## 🚀 Two Ways to Run
 
