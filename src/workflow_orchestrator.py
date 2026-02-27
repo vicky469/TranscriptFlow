@@ -14,7 +14,6 @@ import glob
 import json
 from notion_integration import NotionIntegration
 from transcript_processor import process_file
-from twitter_handler import TwitterThreadHandler
 
 class TranscriptWorkflow:
     def __init__(self, base_dir=None):
@@ -36,10 +35,10 @@ class TranscriptWorkflow:
     
     def run_complete_workflow(self, url, open_notion=True):
         """
-        Run the complete workflow from URL (YouTube or Twitter) to Notion page.
+        Run the complete workflow from YouTube URL to Notion page.
         
         Args:
-            url (str): YouTube video URL or Twitter thread URL
+            url (str): YouTube video URL
             open_notion (bool): Whether to open the Notion page in browser
             
         Returns:
@@ -51,25 +50,12 @@ class TranscriptWorkflow:
             'upload': {'success': False}
         }
         
-        # Detect URL type and route accordingly
-        # Check if it's a Twitter URL (simple check to avoid importing TwitterThreadHandler unnecessarily)
-        is_twitter = 'twitter.com' in url or 'x.com' in url
+        print("🚀 Starting YouTube to Notion workflow...")
+        print(f"📺 URL: {url}")
         
-        if is_twitter:
-            print("🚀 Starting Twitter to Notion workflow...")
-            print(f"🐦 URL: {url}")
-            
-            # Step 1: Download thread from Twitter (initialize handler only when needed)
-            print("\n📥 Step 1: Downloading thread from Twitter...")
-            twitter_handler = TwitterThreadHandler(self.base_dir)
-            success, raw_file, content_info = twitter_handler.fetch_thread_content(url)
-        else:
-            print("🚀 Starting YouTube to Notion workflow...")
-            print(f"📺 URL: {url}")
-            
-            # Step 1: Download transcript from YouTube using shell script
-            print("\n📥 Step 1: Downloading transcript from YouTube...")
-            success, raw_file, content_info = self._download_with_script(url)
+        # Step 1: Download transcript from YouTube using shell script
+        print("\n📥 Step 1: Downloading transcript from YouTube...")
+        success, raw_file, content_info = self._download_with_script(url)
         
         results['download'] = {
             'success': success,
@@ -300,7 +286,6 @@ def main():
         print("  python workflow_orchestrator.py --existing <transcript_file>")
         print("\nExamples:")
         print("  python workflow_orchestrator.py 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'")
-        print("  python workflow_orchestrator.py 'https://x.com/username/status/1234567890'")
         print("  python workflow_orchestrator.py --existing transcript.txt")
         sys.exit(1)
     
@@ -324,7 +309,7 @@ def main():
         if not results['success']:
             sys.exit(1)
     else:
-        # Process URL (YouTube or Twitter)
+        # Process URL (YouTube)
         url = sys.argv[1]
         
         results = workflow.run_complete_workflow(url)

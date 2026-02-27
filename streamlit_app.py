@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Streamlit web interface for YouTube and Twitter to Notion processing.
+Streamlit web interface for YouTube to Notion processing.
 Provides a user-friendly GUI for the complete workflow.
 """
 
@@ -14,7 +14,6 @@ from urllib.parse import unquote
 sys.path.append(str(Path(__file__).parent / "src"))
 
 from workflow_orchestrator import TranscriptWorkflow
-from twitter_handler import TwitterThreadHandler
 
 # Helper functions
 def decode_youtube_url(url):
@@ -27,18 +26,11 @@ def is_valid_youtube_url(url):
     """Validate YouTube URL format."""
     if not url:
         return False
-    return url.startswith("https://www.youtube.com/watch?v=") and len(url) > 32
-
-def is_valid_twitter_url(url):
-    """Validate Twitter/X URL format."""
-    if not url:
-        return False
-    twitter_handler = TwitterThreadHandler()
-    return twitter_handler.is_twitter_url(url)
+    return url.strip().startswith("https://www.youtube.com/")
 
 def is_valid_url(url):
-    """Validate if URL is either YouTube or Twitter."""
-    return is_valid_youtube_url(url) or is_valid_twitter_url(url)
+    """Validate YouTube URL format."""
+    return is_valid_youtube_url(url)
 
 # Page configuration
 st.set_page_config(
@@ -192,7 +184,7 @@ def main():
     
     # Header
     st.title("🎯 Content to Notion Processor")
-    st.caption("Process YouTube videos or Twitter threads to Notion")
+    st.caption("Process YouTube videos to Notion")
     
     # Input section
     col1, col2 = st.columns([4, 1])
@@ -214,8 +206,8 @@ def main():
         youtube_url = st.text_input(
             "Content URL",
             value=input_value,
-            placeholder="https://www.youtube.com/watch?v=... or https://x.com/user/status/...",
-            help="Paste a YouTube video URL or Twitter/X thread URL, then press Enter",
+            placeholder="https://www.youtube.com/watch?v=...",
+            help="Paste a YouTube video URL, then press Enter",
             label_visibility="collapsed",
             key=widget_key,
             disabled=st.session_state.processing
@@ -236,12 +228,9 @@ def main():
             button_type = "secondary"
             button_disabled = not is_valid_url(youtube_url)
             if not is_valid_url(youtube_url):
-                help_text = "Enter a valid YouTube or Twitter URL"
+                help_text = "Enter a valid YouTube URL"
             else:
-                if is_valid_twitter_url(youtube_url):
-                    help_text = "Click to start processing the Twitter thread"
-                else:
-                    help_text = "Click to start processing the YouTube video"
+                help_text = "Click to start processing the YouTube video"
         
         process_button = st.button(
             button_text,
@@ -263,8 +252,7 @@ def main():
             # Start processing only with valid URL
             st.session_state.processing = True
             st.session_state.current_step = "initializing"
-            content_type = "Twitter thread" if is_valid_twitter_url(youtube_url) else "YouTube video"
-            st.session_state.progress_messages = [f"🚀 Starting {content_type} to Notion workflow..."]
+            st.session_state.progress_messages = ["🚀 Starting YouTube video to Notion workflow..."]
             st.rerun()
     
     # Check if Enter was pressed (input value changed and not empty)
@@ -274,17 +262,17 @@ def main():
         if is_valid_url(youtube_url):
             st.session_state.processing = True
             st.session_state.current_step = "initializing"
-            content_type = "Twitter thread" if is_valid_twitter_url(youtube_url) else "YouTube video"
-            st.session_state.progress_messages = [f"🚀 Starting {content_type} to Notion workflow..."]
+            st.session_state.progress_messages = ["🚀 Starting YouTube video to Notion workflow..."]
             st.rerun()
     
     # Run workflow step by step with UI updates
     if st.session_state.processing and st.session_state.current_step == "initializing":
         # Start downloading
         st.session_state.current_step = "downloading"
-        content_type = "Twitter thread" if is_valid_twitter_url(youtube_url) else "YouTube video"
-        download_msg = "📥 Downloading thread from Twitter..." if is_valid_twitter_url(youtube_url) else "📥 Downloading transcript from YouTube..."
-        st.session_state.progress_messages = [f"🚀 Starting {content_type} to Notion workflow...", download_msg]
+        st.session_state.progress_messages = [
+            "🚀 Starting YouTube video to Notion workflow...",
+            "📥 Downloading transcript from YouTube..."
+        ]
         st.rerun()
     
     elif st.session_state.processing and st.session_state.current_step == "downloading":
@@ -293,14 +281,8 @@ def main():
             workflow = TranscriptWorkflow()
             # Decode URL for better display and processing
             decoded_url = decode_youtube_url(youtube_url)
-            
-            # Use appropriate download method based on URL type
-            if is_valid_twitter_url(decoded_url):
-                # Initialize Twitter handler only when needed
-                twitter_handler = TwitterThreadHandler(workflow.base_dir)
-                success, raw_file, content_info = twitter_handler.fetch_thread_content(decoded_url)
-            else:
-                success, raw_file, content_info = workflow._download_with_script(decoded_url)
+
+            success, raw_file, content_info = workflow._download_with_script(decoded_url)
             
             if success:
                 st.session_state.download_results = {
@@ -501,17 +483,16 @@ def main():
         
         ### 📺 Supported Sources
         - **YouTube** - Video transcripts
-        - **Twitter/X** - Thread content (via Thread Reader App)
         
         ### 🔧 Requirements
-        - Valid YouTube or Twitter URL
+        - Valid YouTube URL
         - Notion integration configured
         - Environment variables set in `.env`
         """)
         
         st.markdown("### 🚀 Quick Start")
         st.markdown("""
-        1. Paste YouTube or Twitter URL
+        1. Paste YouTube URL
         2. Click 'Process Content'
         3. Wait for completion
         4. Open your new Notion page!

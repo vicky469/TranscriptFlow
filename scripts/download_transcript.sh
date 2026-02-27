@@ -64,7 +64,7 @@ extract_metadata() {
     
     # Get full metadata first
     local full_metadata
-    full_metadata=$(yt-dlp --dump-json --no-warnings "$youtube_url" 2>/dev/null || true)
+    full_metadata=$(yt-dlp --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" --referer "https://www.youtube.com/" --dump-json --no-warnings "$youtube_url" 2>/dev/null || true)
     
     if [[ -z "$full_metadata" ]]; then
         log_error "Failed to fetch video metadata"
@@ -160,7 +160,8 @@ print(chinese_words, english_words, total_units, f'{ratio:.2f}')
 download_standard_subtitles() {
     log_progress "Method 1: Trying standard download..."
     
-    yt-dlp --write-auto-subs --sub-langs "en,zh,zh-CN,zh-TW" --sub-format "vtt" --skip-download \
+    yt-dlp --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" --referer "https://www.youtube.com/" \
+        --write-auto-subs --sub-langs "en,zh,zh-CN,zh-TW" --sub-format "vtt" --skip-download \
         --output "$TRANSCRIPT_DIR/%(title)s.%(ext)s" "$YOUTUBE_URL" 2>/dev/null || true
     
     if ls "$TRANSCRIPT_DIR"/*.vtt 1>/dev/null 2>&1; then

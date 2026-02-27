@@ -38,12 +38,12 @@ class WhisperTranscriber:
             self.model = whisper.load_model(model_size)
             print("⚠️ Using OpenAI Whisper on CPU")
     
-    def transcribe_youtube_video(self, youtube_url, output_dir, language=None):
+    def transcribe_video(self, video_url, output_dir, language=None):
         """
-        Download audio from YouTube and transcribe using Whisper.
+        Download audio from a YouTube URL and transcribe using Whisper.
         
         Args:
-            youtube_url (str): YouTube video URL
+            video_url (str): YouTube video URL
             output_dir (str): Directory to save transcript
             language (str): Language code (e.g., 'zh', 'en') or None for auto-detect
             
@@ -82,11 +82,11 @@ class WhisperTranscriber:
                     print("🔍 Retrying with verbose output for diagnostics...")
                     cmd.extend(["-v", "--update"])  # Verbose and update check
                 
-                cmd.append(youtube_url)
+                cmd.append(video_url)
                 
                 # Run with real-time output instead of capturing
                 try:
-                    result = subprocess.run(cmd, text=True, timeout=180)  # 3 minute timeout
+                    result = subprocess.run(cmd, text=True, timeout=300)  # 5 minute timeout for longer videos
                     download_time = time.time() - download_start
                     
                     if result.returncode == 0:
@@ -103,7 +103,7 @@ class WhisperTranscriber:
                         print("⚠️  First attempt timed out, trying once more...")
                         continue
                     else:
-                        print("❌ Download timed out after 3 minutes on retry")
+                        print("❌ Download timed out after 5 minutes on retry")
                         return False, None, "Download timed out"
                 except KeyboardInterrupt:
                     print("\n⚠️  Download cancelled by user")
@@ -139,7 +139,7 @@ class WhisperTranscriber:
                 print(f"✅ OpenAI Whisper completed in {transcription_time:.1f} seconds")
             
             # Get video title for filename
-            title_cmd = ["yt-dlp", "--print", "title", youtube_url]
+            title_cmd = ["yt-dlp", "--print", "title", video_url]
             title_result = subprocess.run(title_cmd, capture_output=True, text=True)
             
             if title_result.returncode == 0:
@@ -148,7 +148,8 @@ class WhisperTranscriber:
                 title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
                 transcript_file = Path(output_dir) / f"{title}_whisper.txt"
             else:
-                video_id = youtube_url.split("v=")[1].split("&")[0] if "v=" in youtube_url else "unknown"
+                # Extract ID from URL
+                video_id = video_url.split("v=")[1].split("&")[0] if "v=" in video_url else "unknown"
                 transcript_file = Path(output_dir) / f"{video_id}_whisper_transcript.txt"
             
             with open(transcript_file, 'w', encoding='utf-8') as f:
@@ -162,6 +163,21 @@ class WhisperTranscriber:
             
         except Exception as e:
             return False, None, f"Transcription error: {e}"
+    
+    def transcribe_youtube_video(self, youtube_url, output_dir, language=None):
+        """
+        Download audio from YouTube and transcribe using Whisper.
+        Kept for backward compatibility.
+        
+        Args:
+            youtube_url (str): YouTube video URL
+            output_dir (str): Directory to save transcript
+            language (str): Language code (e.g., 'zh', 'en') or None for auto-detect
+            
+        Returns:
+            tuple: (success, transcript_file_path, transcript_text)
+        """
+        return self.transcribe_video(youtube_url, output_dir, language)
 
 def main():
     """Command line usage."""

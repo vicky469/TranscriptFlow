@@ -32,7 +32,7 @@ class NotionIntegration:
         self.client = Client(auth=self.token)
     
     def _add_content_metadata(self, properties, content_info):
-        """Add content metadata (video or thread) to Notion page properties."""
+        """Add content metadata to Notion page properties."""
         if not content_info:
             return properties
         
@@ -49,11 +49,9 @@ class NotionIntegration:
                 ]
             }
         
-        # Handle creation date for both YouTube and Twitter (date only, no time)
+        # Handle creation date (date only, no time)
         # Format as rich_text for compatibility with existing database
         if content_info.get('created_time'):
-            # Twitter thread with ISO datetime - extract date only
-            from datetime import datetime
             try:
                 dt = datetime.fromisoformat(content_info['created_time'])
                 formatted_date = dt.strftime('%Y-%m-%d')  # Date only
@@ -111,26 +109,16 @@ class NotionIntegration:
                 ]
             }
         
-        # Add content URL if available (works for both YouTube and Twitter)
+        # Add content URL if available
         content_url = content_info.get('webpage_url') or content_info.get('url')
         if content_url:
             properties["Content URL"] = {
                 "url": content_url
             }
         
-        # Add Source column (Twitter or YouTube)
-        source_type = content_info.get('type', '')
-        if source_type == 'twitter_thread':
-            source_name = "Twitter"
-        elif content_info.get('webpage_url') or content_info.get('duration'):
-            # Has YouTube-specific fields
-            source_name = "YouTube"
-        else:
-            source_name = "Unknown"
-        
         properties["Source"] = {
             "select": {
-                "name": source_name
+                "name": "YouTube"
             }
         }
         
@@ -234,53 +222,10 @@ class NotionIntegration:
             return False, None, None
     
     def _create_content_blocks(self, content, content_info=None):
-        """Convert transcript content into Notion blocks, with inline media for Twitter threads."""
+        """Convert transcript content into Notion blocks."""
         blocks = []
-        
-        # For Twitter threads with structured items, use inline layout
-        if content_info and content_info.get('type') == 'twitter_thread' and content_info.get('thread_items'):
-            thread_items = content_info['thread_items']
-            
-            # Process items in order to preserve original layout
-            for item in thread_items:
-                if item['type'] == 'text':
-                    # Add text as paragraph
-                    blocks.append(self._create_paragraph_block(item['content']))
-                    
-                elif item['type'] == 'image':
-                    # Add image inline
-                    blocks.append({
-                        "object": "block",
-                        "type": "image",
-                        "image": {
-                            "type": "external",
-                            "external": {
-                                "url": item['content']
-                            }
-                        }
-                    })
-                    
-                elif item['type'] == 'video':
-                    # Add video link
-                    blocks.append({
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [
-                                {
-                                    "type": "text",
-                                    "text": {
-                                        "content": f"🎥 Video",
-                                        "link": {"url": item['content']}
-                                    }
-                                }
-                            ]
-                        }
-                    })
-            
-            return blocks
-        
-        # For regular content (YouTube or threads without structured items), use default layout
+
+        # Use default transcript layout
         # Add content heading
         blocks.append({
             "object": "block",
